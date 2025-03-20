@@ -1,4 +1,4 @@
-## Commit 1
+## Commit 1 reflection
 Berikut implementasi fungsi handle_connection pada kode:
 
 ```
@@ -51,7 +51,7 @@ Output menunjukkan client mengirim permintaan HTTP GET ke path utama (/) menggun
 
 Seluruh data ini dibaca oleh BufReader dari koneksi TCP, berhenti saat menemui baris kosong sesuai standar HTTP. Meski sederhana, kode ini menjadi dasar untuk mempelajari cara server web membaca permintaan HTTP di Rust.
 
-## Commit 2
+## Commit 2 reflection
 
 ![Alt text](assets/images/commit2.png)
 
@@ -100,7 +100,7 @@ warning: `hello` (bin "hello") generated 1 warning
      Running `target\debug\hello.exe`
 ```
 
-## Commit 3
+## Commit 3 reflection
 
 ![Alt text](assets/images/commit3.png)
 
@@ -183,7 +183,7 @@ Awalnya, seluruh kode untuk menangani permintaan HTTP bercampur di dalam satu fu
 Setelah dilakukan refactoring dengan memisahkan kode ke dalam fungsi ```get_response()``` dan ```build_response()```, kode menjadi lebih modular. Setiap fungsi sekarang memiliki satu tugas yang jelas, sehingga kode lebih mudah dibaca dan dipahami. Selain itu, refactoring ini membuat kode lebih mudah untuk diubah dan diperluas. Misalnya, untuk menambahkan route baru, kita hanya perlu melakukan perubahan pada fungsi ```get_response()``` tanpa harus mengganggu bagian kode lainnya. Struktur kode yang baru ini juga lebih terorganisir dan mengikuti prinsip Single Responsibility Principle (SRP), di mana setiap fungsi atau modul hanya memiliki satu alasan untuk berubah. Hal ini membuat kode lebih bersih, lebih mudah dirawat, dan siap untuk dikembangkan lebih lanjut.
 
 
-## Commit 4
+## Commit 4 reflection
 
 Berikut perubahan code:
 
@@ -217,7 +217,7 @@ Ketika kita membuka dua windows browser dan mengakses ```127.0.0.1/sleep``` di s
 
 Jika di windows browser lain kita mengakses ```127.0.0.1/```, maka halaman tersebut juga akan ikut lambat atau tertunda, karena server hanya menjalankan satu thread utama untuk menangani semua koneksi secara bergiliran (single-threaded). Ini berarti selama satu permintaan masih diproses, permintaan lainnya harus menunggu hingga selesai. Jika ada banyak pengguna yang mencoba mengakses server secara bersamaan, maka semua permintaan akan mengantri dan performa server akan sangat lambat.
 
-## Commit 5
+## Commit 5 reflection
 Berikut code pada lib.rs
 ```
 pub struct ThreadPool;
@@ -260,3 +260,41 @@ Perubahan utama yang dilakukan adalah menambahkan kemampuan multithreading pada 
 Untuk meningkatkan performa, dibuat sebuah ```ThreadPool``` pada file ```lib.rs``` yang memungkinkan server memproses beberapa koneksi secara paralel. Struktur ```ThreadPool``` ini sederhana; ketika metode ```execute``` dipanggil, sebuah thread baru langsung dibuat menggunakan ```std::thread::spawn``` untuk menjalankan closure yang diberikan. Di ```main.rs```, server kemudian menggunakan thread pool ini untuk menjalankan ```handle_connection``` secara paralel pada setiap koneksi yang masuk. Hal ini membuat server dapat menangani banyak permintaan sekaligus, tanpa saling menunggu satu sama lain, sehingga lebih efisien dan responsif.
 
 Secara keseluruhan, perubahan ini mendemonstrasikan konsep dasar concurrency pada server HTTP, di mana setiap koneksi klien ditangani oleh thread yang berbeda, mengurangi waktu tunggu klien lain meskipun ada permintaan yang memerlukan waktu proses lebih lama, seperti ```/sleep```.
+
+## Commit bonus reflection
+
+perubahan pada code:
+
+lib.rs
+```
+pub struct ThreadPool{
+    size: usize,
+}
+
+impl ThreadPool {
+    pub fn build(size: usize) -> ThreadPool {
+        assert!(size > 0);
+        println!("Membangun ThreadPool dengan {} thread!", size);
+        ThreadPool { size }
+    }
+
+    pub fn execute<F>(&self, f: F)
+    where
+        F: FnOnce() + Send + 'static,
+    {
+        println!("Menjalankan task di thread pool dengan {} thread", self.size); // log tambahan
+        std::thread::spawn(f);
+    }
+}
+```
+
+main.rs
+```
+fn main() {
+    ...
+    let pool = ThreadPool::build(4);
+    ...
+}
+```
+
+Perbedaan utama antara ```build``` dan ```new``` dalam kode di atas terletak pada penamaan fungsi dan tujuannya dalam membangun sebuah instance ```ThreadPool```. Secara konvensi, fungsi ```new``` di Rust biasanya digunakan untuk membuat instance baru dari sebuah struct dengan cara yang sederhana dan langsung. Namun, dalam kode yang telah diperbarui, kita menggunakan fungsi ```build``` sebagai pengganti ```new``` untuk memberikan makna yang lebih spesifik, yaitu bahwa proses pembuatan ```ThreadPool``` ini mungkin melibatkan langkah-langkah persiapan atau konfigurasi tambahan di masa mendatang. Pada kode saat ini, ```build``` digunakan untuk menginisialisasi ```ThreadPool``` sekaligus mencetak informasi tentang jumlah thread yang digunakan, memberikan gambaran bahwa kita sedang "membangun" sebuah pool worker, bukan sekadar membuat instance biasa. Penggunaan ```build``` juga memberi fleksibilitas dalam pengembangan selanjutnya jika ingin menambahkan proses setup yang lebih kompleks, seperti membuat thread worker atau menyiapkan queue task. Dengan demikian, penggunaan ```build``` dalam kode ini memberi konteks yang lebih deskriptif dan membuka kemungkinan ekspansi fitur tanpa mengubah kontrak atau perilaku metode ```new``` yang lebih umum.
