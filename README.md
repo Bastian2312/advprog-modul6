@@ -50,3 +50,52 @@ Request: [
 Output menunjukkan client mengirim permintaan HTTP GET ke path utama (/) menggunakan HTTP 1.1. Header Host: 127.0.0.1:7878 menegaskan server lokal yang diakses. User-Agent mengidentifikasi browser client sebagai Microsoft Edge 134 di Windows. Header keamanan seperti sec-ch-ua dan sec-ch-ua-platform memberi detail browser dan OS, sementara Cookie mengandung token CSRF untuk keamanan. Header Accept-Encoding dan Accept-Language menunjukkan preferensi kompresi data dan bahasa yang diinginkan client.
 
 Seluruh data ini dibaca oleh BufReader dari koneksi TCP, berhenti saat menemui baris kosong sesuai standar HTTP. Meski sederhana, kode ini menjadi dasar untuk mempelajari cara server web membaca permintaan HTTP di Rust.
+
+## Commit 2
+
+![Alt text](images/commit2.png)
+
+Berikut perubahan code pada milestone 2:
+```
+ use std::{
+     fs,
+     ...
+ }
+ 
+ fn handle_connection(mut stream: TcpStream) {
+     let buf_reader = BufReader::new(&mut stream);
+     let http_request: Vec<_> = buf_reader
+         .lines() 
+         .map(|result| result.unwrap()) 
+         .take_while(|line| !line.is_empty())
+         .collect();
+ 
+     let status_line = "HTTP/1.1 200 OK"; 
+     let contents = fs::read_to_string("hello.html").unwrap(); 
+     let length = contents.len();
+ 
+     let response = format!("{status_line}\r\nContent-Length: {length}\r\n\r\n{contents}");
+     stream.write_all(response.as_bytes()).unwrap();
+ }
+ ```
+
+ Pada kode yang diperbarui, fungsi ```handle_connection``` tidak hanya membaca permintaan HTTP dari klien tetapi juga membangun respons untuk dikirim kembali. Server menggunakan ```BufReader``` untuk membaca stream koneksi TCP baris per baris hingga menemui baris kosong, yang menandai akhir header HTTP. Meskipun permintaan dikumpulkan ke variabel ```http_request```, data ini belum diproses lebih lanjut—menunjukkan bahwa server saat ini merespons semua permintaan dengan cara yang sama, terlepas dari isi request-nya.
+
+Setelah membaca permintaan, server menyiapkan respons HTTP dengan status ```200 OK```, lalu membaca isi file ```hello.html``` menggunakan ```fs::read_to_string```. Header ```Content-Length``` dihitung berdasarkan panjang konten HTML untuk memastikan klien dapat memahami batas data yang diterima. Seluruh respons dikemas dalam format string yang sesuai standar HTTP (status line, header, baris kosong, dan body), lalu dikirim ke klien melalui ```stream.write_all()```. Dengan ini, server mampu mengirim halaman HTML statis ke browser klien sebagai tanggapan atas permintaan apa pun.
+
+Setelah menjalankan ```cargo run``` dan mengakses ```http://127.0.0.1:7878```, server menampilkan output berikut:
+
+```
+PS C:\Users\Basti\OneDrive\Desktop\Folders\Kuliah\Semester 4\ADPRO\hello> cargo run
+warning: unused variable: `http_request`
+  --> src\main.rs:16:9
+   |
+16 |     let http_request: Vec<_> = buf_reader
+   |         ^^^^^^^^^^^^ help: if this is intentional, prefix it with an underscore: `_http_request`
+   |
+   = note: `#[warn(unused_variables)]` on by default
+
+warning: `hello` (bin "hello") generated 1 warning
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.03s
+     Running `target\debug\hello.exe`
+```
