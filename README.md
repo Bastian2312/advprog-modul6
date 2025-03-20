@@ -1,4 +1,4 @@
-## Comit 1
+## Commit 1
 Berikut implementasi fungsi handle_connection pada kode:
 
 ```
@@ -53,7 +53,7 @@ Seluruh data ini dibaca oleh BufReader dari koneksi TCP, berhenti saat menemui b
 
 ## Commit 2
 
-![Alt text](images/commit2.png)
+![Alt text](assets/images/commit2.png)
 
 Berikut perubahan code pada milestone 2:
 ```
@@ -99,3 +99,85 @@ warning: `hello` (bin "hello") generated 1 warning
     Finished `dev` profile [unoptimized + debuginfo] target(s) in 0.03s
      Running `target\debug\hello.exe`
 ```
+
+## Commit 3
+
+![Alt text](assets/images/commit3.png)
+
+berikut code modified handle_connection:
+
+```
+fn handle_connection(mut stream: TcpStream) {
+    let buf_reader = BufReader::new(&mut stream);
+    let http_request: Vec<_> = buf_reader
+        .lines()
+        .map(|result| result.unwrap())
+        .take_while(|line| !line.is_empty())
+        .collect();
+
+    let request_line = &http_request[0]; // e.g., "GET / HTTP/1.1"
+
+    let (status_line, filename) = if request_line.contains("/bad") {
+        ("HTTP/1.1 404 NOT FOUND", "404.html")
+    } else {
+        ("HTTP/1.1 200 OK", "hello.html")
+    };
+
+    let contents = fs::read_to_string(filename).unwrap();
+    let length = contents.len();
+
+    let response = format!("{status_line}\r\nContent-Length: {length}\r\n\r\n{contents}");
+
+    stream.write_all(response.as_bytes()).unwrap();
+}
+```
+Dalam penanganan permintaan HTTP, kita perlu memutuskan respon apa yang diberikan bergantung pada permintaan dari client. Biasanya kita mengecek request_line dari client yang bentuknya seperti:
+```
+GET / HTTP/1.1
+GET /bad HTTP/1.1
+```
+
+Berdasarkan path (```/``` atau ```/bad```), kita bisa menentukan:
+
+- Status line -> apakah itu ```200 OK``` atau ```404 NOT FOUND```
+- Nama file HTML mana yang akan diberikan sebagai isi response ->```hello.html``` atau ```404.html```
+Bagian ini ditangani dalam fungsi ```get_response()```, yang memisahkan decision logic dari sisa kode.
+
+
+Berikut code setelah refactoring:
+```
+fn handle_connection(mut stream: TcpStream) {
+    let buf_reader = BufReader::new(&mut stream);
+    let http_request: Vec<_> = buf_reader
+        .lines()
+        .map(|result| result.unwrap())
+        .take_while(|line| !line.is_empty())
+        .collect();
+
+    let request_line = &http_request[0]; // GET /path HTTP/1.1
+    let (status_line, filename) = get_response(request_line);
+
+    let response = build_response(status_line, filename);
+
+    stream.write_all(response.as_bytes()).unwrap();
+}
+
+fn get_response(request_line: &str) -> (&str, &str) {
+    if request_line.contains("/bad") {
+        ("HTTP/1.1 404 NOT FOUND", "404.html")
+    } else {
+        ("HTTP/1.1 200 OK", "hello.html")
+    }
+}
+
+fn build_response(status_line: &str, filename: &str) -> String {
+    let contents = fs::read_to_string(filename).unwrap();
+    let length = contents.len();
+
+    format!("{status_line}\r\nContent-Length: {length}\r\n\r\n{contents}")
+}
+```
+
+Awalnya, seluruh kode untuk menangani permintaan HTTP bercampur di dalam satu fungsi ```handle_connection()```. Di dalam fungsi ini, terdapat logika untuk menentukan status respon, membaca file HTML, serta membangun dan mengirimkan respon HTTP ke client. Pendekatan seperti ini membuat kode menjadi sulit dibaca karena berbagai tanggung jawab bercampur aduk dalam satu fungsi. Selain itu, struktur seperti ini juga menyulitkan proses pengembangan di masa depan. Misalnya, ketika ingin menambahkan lebih banyak route seperti```/about``` atau ```/contact```, atau ketika ingin mendukung metode HTTP lain seperti POST, kode yang tidak terstruktur ini akan sulit untuk di-maintain dan diperluas. Reusabilitas kode juga rendah karena tidak ada pemisahan logika yang memungkinkan penggunaan kembali bagian-bagian tertentu dari kode di tempat lain.
+
+Setelah dilakukan refactoring dengan memisahkan kode ke dalam fungsi ```get_response()``` dan ```build_response()```, kode menjadi lebih modular. Setiap fungsi sekarang memiliki satu tugas yang jelas, sehingga kode lebih mudah dibaca dan dipahami. Selain itu, refactoring ini membuat kode lebih mudah untuk diubah dan diperluas. Misalnya, untuk menambahkan route baru, kita hanya perlu melakukan perubahan pada fungsi ```get_response()``` tanpa harus mengganggu bagian kode lainnya. Struktur kode yang baru ini juga lebih terorganisir dan mengikuti prinsip Single Responsibility Principle (SRP), di mana setiap fungsi atau modul hanya memiliki satu alasan untuk berubah. Hal ini membuat kode lebih bersih, lebih mudah dirawat, dan siap untuk dikembangkan lebih lanjut.
