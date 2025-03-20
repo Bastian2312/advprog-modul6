@@ -216,3 +216,47 @@ fn handle_connection(mut stream: TcpStream) {
 Ketika kita membuka dua windows browser dan mengakses ```127.0.0.1/sleep``` di salah satunya, kita akan melihat bahwa halaman membutuhkan waktu lama untuk dimuat. Hal ini terjadi karena pada route ```/sleep```, server secara sengaja menunda respon selama 10 detik menggunakan ```thread::sleep(Duration::from_secs(10))```. Selama proses penundaan ini, thread yang menangani koneksi tersebut akan berhenti sementara (blocking), sehingga tidak dapat melayani permintaan lainnya.
 
 Jika di windows browser lain kita mengakses ```127.0.0.1/```, maka halaman tersebut juga akan ikut lambat atau tertunda, karena server hanya menjalankan satu thread utama untuk menangani semua koneksi secara bergiliran (single-threaded). Ini berarti selama satu permintaan masih diproses, permintaan lainnya harus menunggu hingga selesai. Jika ada banyak pengguna yang mencoba mengakses server secara bersamaan, maka semua permintaan akan mengantri dan performa server akan sangat lambat.
+
+## Commit 5
+Berikut code pada lib.rs
+```
+pub struct ThreadPool;
+
+impl ThreadPool {
+    pub fn new(size: usize) -> ThreadPool {
+        assert!(size > 0);
+        ThreadPool
+    }
+
+    pub fn execute<F>(&self, f: F)
+    where
+        F: FnOnce() + Send + 'static,
+    {
+        std::thread::spawn(f);
+    }
+}
+```
+
+Berikut code perubahan pada main.rs
+```
+use hello::ThreadPool;
+
+fn main(){
+    ...
+    let pool = ThreadPool::new(4);
+
+    for stream in listener.incoming() {
+        ...
+
+        pool.execute(|| {
+            handle_connection(stream);
+        });
+    }
+}
+```
+
+Perubahan utama yang dilakukan adalah menambahkan kemampuan multithreading pada server sederhana tersebut dengan menggunakan ```ThreadPool```. Pada kode sebelumnya, server hanya dapat memproses satu koneksi pada satu waktu karena setiap permintaan ditangani secara langsung dalam loop ```for stream in listener.incoming()``` tanpa threading. Akibatnya, ketika ada permintaan ke endpoint ```/sleep```, server akan melakukan ```sleep``` selama 10 detik, yang menyebabkan permintaan lain harus menunggu hingga permintaan tersebut selesai. Hal ini membuat server menjadi lambat dan tidak responsif saat menangani banyak pengguna secara bersamaan.
+
+Untuk meningkatkan performa, dibuat sebuah ```ThreadPool``` pada file ```lib.rs``` yang memungkinkan server memproses beberapa koneksi secara paralel. Struktur ```ThreadPool``` ini sederhana; ketika metode ```execute``` dipanggil, sebuah thread baru langsung dibuat menggunakan ```std::thread::spawn``` untuk menjalankan closure yang diberikan. Di ```main.rs```, server kemudian menggunakan thread pool ini untuk menjalankan ```handle_connection``` secara paralel pada setiap koneksi yang masuk. Hal ini membuat server dapat menangani banyak permintaan sekaligus, tanpa saling menunggu satu sama lain, sehingga lebih efisien dan responsif.
+
+Secara keseluruhan, perubahan ini mendemonstrasikan konsep dasar concurrency pada server HTTP, di mana setiap koneksi klien ditangani oleh thread yang berbeda, mengurangi waktu tunggu klien lain meskipun ada permintaan yang memerlukan waktu proses lebih lama, seperti ```/sleep```.
