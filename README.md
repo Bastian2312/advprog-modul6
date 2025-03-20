@@ -181,3 +181,38 @@ fn build_response(status_line: &str, filename: &str) -> String {
 Awalnya, seluruh kode untuk menangani permintaan HTTP bercampur di dalam satu fungsi ```handle_connection()```. Di dalam fungsi ini, terdapat logika untuk menentukan status respon, membaca file HTML, serta membangun dan mengirimkan respon HTTP ke client. Pendekatan seperti ini membuat kode menjadi sulit dibaca karena berbagai tanggung jawab bercampur aduk dalam satu fungsi. Selain itu, struktur seperti ini juga menyulitkan proses pengembangan di masa depan. Misalnya, ketika ingin menambahkan lebih banyak route seperti```/about``` atau ```/contact```, atau ketika ingin mendukung metode HTTP lain seperti POST, kode yang tidak terstruktur ini akan sulit untuk di-maintain dan diperluas. Reusabilitas kode juga rendah karena tidak ada pemisahan logika yang memungkinkan penggunaan kembali bagian-bagian tertentu dari kode di tempat lain.
 
 Setelah dilakukan refactoring dengan memisahkan kode ke dalam fungsi ```get_response()``` dan ```build_response()```, kode menjadi lebih modular. Setiap fungsi sekarang memiliki satu tugas yang jelas, sehingga kode lebih mudah dibaca dan dipahami. Selain itu, refactoring ini membuat kode lebih mudah untuk diubah dan diperluas. Misalnya, untuk menambahkan route baru, kita hanya perlu melakukan perubahan pada fungsi ```get_response()``` tanpa harus mengganggu bagian kode lainnya. Struktur kode yang baru ini juga lebih terorganisir dan mengikuti prinsip Single Responsibility Principle (SRP), di mana setiap fungsi atau modul hanya memiliki satu alasan untuk berubah. Hal ini membuat kode lebih bersih, lebih mudah dirawat, dan siap untuk dikembangkan lebih lanjut.
+
+
+## Commit 4
+
+Berikut perubahan code:
+
+```
+use std::{
+    fs,
+    io::{prelude::*, BufReader},
+    net::{TcpListener, TcpStream},
+    thread,
+    time::Duration,
+};
+// --snip--
+
+fn handle_connection(mut stream: TcpStream) {
+    // --snip--
+
+    let (status_line, filename) = match &request_line[..] {
+        "GET / HTTP/1.1" => ("HTTP/1.1 200 OK", "hello.html"),
+        "GET /sleep HTTP/1.1" => {
+            thread::sleep(Duration::from_secs(10));
+            ("HTTP/1.1 200 OK", "hello.html")
+        }
+        _ => ("HTTP/1.1 404 NOT FOUND", "404.html"),
+    };
+
+    // --snip--
+}
+```
+
+Ketika kita membuka dua windows browser dan mengakses ```127.0.0.1/sleep``` di salah satunya, kita akan melihat bahwa halaman membutuhkan waktu lama untuk dimuat. Hal ini terjadi karena pada route ```/sleep```, server secara sengaja menunda respon selama 10 detik menggunakan ```thread::sleep(Duration::from_secs(10))```. Selama proses penundaan ini, thread yang menangani koneksi tersebut akan berhenti sementara (blocking), sehingga tidak dapat melayani permintaan lainnya.
+
+Jika di windows browser lain kita mengakses ```127.0.0.1/```, maka halaman tersebut juga akan ikut lambat atau tertunda, karena server hanya menjalankan satu thread utama untuk menangani semua koneksi secara bergiliran (single-threaded). Ini berarti selama satu permintaan masih diproses, permintaan lainnya harus menunggu hingga selesai. Jika ada banyak pengguna yang mencoba mengakses server secara bersamaan, maka semua permintaan akan mengantri dan performa server akan sangat lambat.
